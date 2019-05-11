@@ -2,18 +2,8 @@
 # script/program név
 # duplicate app lehet?- futhat e kettő?
 # meddig futhat?
-# mennyi erőforrást használhat?
 # prioritás? renice-oljuk a processt
-function kbyte_conversion(){
-	while read KB; do
-	  [ $KB -lt 1024 ] && echo ${KB} kilobyte && break
-	  MB=$(((KB+512)/1024))
-	  [ $MB -lt 1024 ] && echo ${MB} megabyte && break
-	  GB=$(((MB+512)/1024))
-	  [ $GB -lt 1024 ] && echo ${GB} gigabyte && break
-	  echo $(((GB+512)/1024)) terabytes
-   done
-}
+# Logoljon a script fileba?
 function renice_process(){
 # rendszer szinten lehet változtatni a process prioritását,
 # viszont ez manuális konfigurációt igényel ha megközelítjük a maximumot
@@ -27,14 +17,14 @@ function check_process_status {
     #echo $pse
     if [ -n "$pse" ]; then
 		CMD=`echo $pse | tr -s ' ' | cut -d ' ' -f 3`
-		if [ -z $CMD];then
+		if ! [ -z $CMD ];then
 			cpu=$CMD
 			cpu=${cpu%.*}
 		else
 			cpu=0
 		fi
 		CMD=`echo $pse | tr -s ' ' | cut -d ' ' -f 4`
-		if [ -z $CMD];then
+		if ! [ -z $CMD ];then
 			mem=$CMD
 			mem=${mem%.*}
 		else
@@ -43,27 +33,16 @@ function check_process_status {
 		uptime=`ps -p $1 -o etime | sed -n 2p | tr -s ' '`
 		echo "cpu hasznalat : $cpu, mem hasznalat: $mem, uptime : $uptime"
 	else
-		echo "HIBA A processz leált"
+		echo "HIBA A processz leált!"
     fi
 
-}
-function check_for_process_duplicate_by_name {
-    # Megnézzük, hogy fut e már a process
-    # $BASH_SOURCE, is működhetne,de az tartalmazza az elérési utat is
-    FUT=`ps aux | grep "$1" | grep -v 'grep' | grep -v "$THISSCRIPT"`
-    if [ -n "$FUT" ]; then
-      # A process fut már!
-      return true
-    else
-      # Még nem fut
-      return false
-    fi
 }
 
 
 THISSCRIPT=$0
 THISSCRIPT_PID=$$
-SYSTEM_MEM_KB=`grep MemTotal /proc/meminfo | awk '{print $2}' | kbyte_conversion`
+
+SYSTEM_MEM_KB=`grep MemTotal /proc/meminfo | awk '{print $2}' `
 SYSTEM_IP=`ip addr | grep 'state UP' -A2 | tail -n1 | awk '{print $2}' | cut -f1  -d'/'`
 
 echo "rendszer adatok"
@@ -85,7 +64,7 @@ fi
 if [ -z "$2" ]
 then	
       echo "Hiányzó paraméter"
-		PS3='Please enter your choice: '
+		PS3='Válasz: '
 		options=("ALACSONY" "NORMÁL" "MAGAS" "KIHAGY")
 		select opt in "${options[@]}"
 		do
@@ -126,6 +105,60 @@ else
 		fi 
 	fi
 fi
+if [ -z "$3" ]
+then
+	while [ -z $TIMEOUT ]
+	do
+	  	echo "Hiányzó paraméter"
+		while ! [[ "$TIMEOUT" =~ ^[0-9]+$ ]]
+	    do
+		    echo "csak szám kerülhet a timeoutba"
+		  echo -n "Timeout(másodpercben):"
+		  read TIMEOUT
+		done
+	done
+else
+	if ! [[ "$3" =~ ^[0-9]+$ ]]
+	    then
+	        echo "csak szám kerülhet a timeoutba"
+	        exit
+	fi
+
+    TIMEOUT=$3
+fi
+
+if [ -z "$4" ]
+then	
+      echo "Hiányzó paraméter"
+		PS3='Logoljon a script?: '
+		options=("IGEN" "NEM")
+		select opt in "${options[@]}"
+		do
+			case $opt in
+				"IGEN")
+					echo "Hova logoljon?(Létező directory-t várok)"
+				    read HOVA_LOGOLJON
+				    while [! -d "$HOVA_LOGOLJON" ]; 
+				    do
+  						echo "Hova logoljon?(Létező directory-t várok)"
+  						echo "PL: /home/fulep/"
+				    	read HOVA_LOGOLJON
+					done
+					PREF="monitor19.log"
+					LOG_FILE="$HOVA_LOGOLJON$PREF"
+  					
+  					break
+				    ;;
+				"NEM")
+				echo "OK A script nem fog logolni"
+					break
+				    ;;
+				*) echo "Érvénytelen opció $REPLY";;
+			esac
+		done
+fi
+
+
 echo $$
 echo "$APP indítása..."
 $APP &
@@ -144,7 +177,6 @@ ATLAGOS_FUTASI_IDO=0
 for (( i = $TIC ; i <= $TIMEOUT ; i++ ))
 do 
 	check_process_status $PROCESS_PID
-	
 	ATLAGOS_CPU_HASZNALAT=$((ATLAGOS_CPU_HASZNALAT+cpu))
 	ATLAGOS_MEM_HASZNALAT=$((ATLAGOS_MEM_HASZNALAT+mem))
 	sleep 1
@@ -156,3 +188,4 @@ kill $PROCESS_PID
 ATLAGOS_CPU_HASZNALAT=$((ATLAGOS_CPU_HASZNALAT/TIMEOUT))
 ATLAGOS_MEM_HASZNALAT=$((ATLAGOS_MEM_HASZNALAT/TIMEOUT))
 echo "ÁTLAGOS CPU HASZNÁLAT:$ATLAGOS_CPU_HASZNALAT,$ATLAGOS_MEM_HASZNALAT,$uptime"
+echo "$LOG_FILE"
