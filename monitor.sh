@@ -1,6 +1,5 @@
 #!/bin/bash
 # script/program név
-# duplicate app lehet?- futhat e kettő?
 # meddig futhat?
 # prioritás? renice-oljuk a processt
 # Logoljon a script fileba?
@@ -31,8 +30,18 @@ function check_process_status {
 			mem=0
 		fi
 		uptime=`ps -p $1 -o etime | sed -n 2p | tr -s ' '`
+		if ! [ -z "$LOG_FILE" ];
+		then 
+			echo "`date` $APP $PROCESS_PID cpu hasznalat : $cpu, mem hasznalat: $mem, uptime : $uptime" >> $LOG_FILE
+		fi
+
 		echo "cpu hasznalat : $cpu, mem hasznalat: $mem, uptime : $uptime"
 	else
+		if ! [ -z "$LOG_FILE" ];
+		then 
+			echo "`date` $APP $PROCESS_PID HIBA A processz leált!" >> $LOG_FILE
+		fi
+
 		echo "HIBA A processz leált!"
     fi
 
@@ -136,16 +145,20 @@ then
 		do
 			case $opt in
 				"IGEN")
-					echo "Hova logoljon?(Létező directory-t várok)"
+					echo "Hova logoljon?(Létező directory-t várok PL: /home/fulep)"
 				    read HOVA_LOGOLJON
-				    while [! -d "$HOVA_LOGOLJON" ]; 
+				    while ! [ -d "$HOVA_LOGOLJON" ]; 
 				    do
-  						echo "Hova logoljon?(Létező directory-t várok)"
-  						echo "PL: /home/fulep/"
-				    	read HOVA_LOGOLJON
+  						echo "Hova logoljon?(Létező directory-t várok PL: /home/fulep)"
+  						read HOVA_LOGOLJON
 					done
-					PREF="monitor19.log"
-					LOG_FILE="$HOVA_LOGOLJON$PREF"
+					while [ -z "$PREF" ]; 
+				    do
+  						echo "Logfile elnevezése?"
+				    	read PREF
+					done
+					#PREF="monitor19.log"
+					LOG_FILE="$HOVA_LOGOLJON/$PREF"
   					
   					break
 				    ;;
@@ -157,9 +170,13 @@ then
 			esac
 		done
 fi
+if ! [ -z "$LOG_FILE" ];
+then 
+	touch $LOG_FILE
+	echo "`date` $APP $PROCESS_PID" >> $LOG_FILE
+fi
 
-
-echo $$
+#echo $$
 echo "$APP indítása..."
 $APP &
 echo "$APP fut!"
@@ -188,4 +205,3 @@ kill $PROCESS_PID
 ATLAGOS_CPU_HASZNALAT=$((ATLAGOS_CPU_HASZNALAT/TIMEOUT))
 ATLAGOS_MEM_HASZNALAT=$((ATLAGOS_MEM_HASZNALAT/TIMEOUT))
 echo "ÁTLAGOS CPU HASZNÁLAT:$ATLAGOS_CPU_HASZNALAT,$ATLAGOS_MEM_HASZNALAT,$uptime"
-echo "$LOG_FILE"
